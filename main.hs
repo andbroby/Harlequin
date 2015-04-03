@@ -4,6 +4,7 @@ import System.Environment
 import Control.Monad
 import Text.ParserCombinators.Parsec hiding (spaces)
 import Numeric
+import Data.Char
 
 main = do
   args <- getArgs
@@ -48,22 +49,29 @@ parseAtom = do
     _ -> Atom atom
 
 parseNumber :: Parser LispVal
-parseNumber = parseDec <|> parseDec2 <|> parseHex -- <|> parseBin <|> parseOct
+parseNumber = parseDec <|> parseDec2 <|> parseHex <|> parseBin -- <|> parseOct
 
 parseDec :: Parser LispVal
 parseDec = liftM (Number . read) $ many1 digit
 
 parseDec2 :: Parser LispVal
-parseDec2 = do
+parseDec2 = try $ do
   string "#d"
   x <- many1 digit
   return . Number . read $ x
 
 parseHex :: Parser LispVal
-parseHex = do
+parseHex = try $ do
   string "#x"
   x <- many1 hexDigit
   return $ Number . fst $ readHex x !! 0
+
+parseBin :: Parser LispVal
+parseBin = try $ do
+  string "#b"
+  x <- many1 . oneOf $ "10"
+  let readBin = foldl (\acc y -> acc*2 + (fromIntegral . ord $ y)) 0
+  return $ Number .  readBin $ x
 
 parseExpr :: Parser LispVal
 parseExpr = parseAtom <|> parseString <|> parseNumber <|> parseBool
