@@ -3,13 +3,14 @@ module Main where
 import System.Environment
 import Control.Monad
 import Text.ParserCombinators.Parsec hiding (spaces)
+import Numeric
 
 main = do
   args <- getArgs
   putStrLn . readExpr $ args !! 0
   
 symbol :: Parser Char
-symbol = oneOf "!#%&|*+-/:<=>?@^_~"
+symbol = oneOf "!%&|*+-/:<=>?@^_~"
 
 readExpr :: String -> String
 readExpr input = case parse parseExpr "lisp" input of
@@ -46,14 +47,29 @@ parseAtom = do
     "#f" -> Bool False
     _ -> Atom atom
 
-parseNumber :: Parser LispValas
-parseNumber = do
+parseNumber :: Parser LispVal
+parseNumber = parseDec <|> parseDec2 <|> parseHex -- <|> parseBin <|> parseOct
+
+parseDec :: Parser LispVal
+parseDec = liftM (Number . read) $ many1 digit
+
+parseDec2 :: Parser LispVal
+parseDec2 = do
+  string "#d"
   x <- many1 digit
-  return $ case x of 
-parseNumber = many1 digit >> \x -> return . Number . read $ x
+  return . Number . read $ x
+
+parseHex :: Parser LispVal
+parseHex = do
+  string "#x"
+  x <- many1 hexDigit
+  return $ Number . fst $ readHex x !! 0
 
 parseExpr :: Parser LispVal
-parseExpr = parseAtom <|> parseString <|> parseNumber
+parseExpr = parseAtom <|> parseString <|> parseNumber <|> parseBool
+
+parseBool :: Parser LispVal
+parseBool = char '#' >> ((char 't' >> return (Bool True)) <|> (char 'f' >> return (Bool False)))
 
 data LispVal = Atom String
                | List [LispVal]
