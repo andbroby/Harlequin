@@ -6,12 +6,13 @@ import Text.ParserCombinators.Parsec hiding (spaces)
 
 main = do
   args <- getArgs
-
+  putStrLn . readExpr $ args !! 0
+  
 symbol :: Parser Char
 symbol = oneOf "!#%&|*+-/:<=>?@^_~"
 
 readExpr :: String -> String
-readExpr input = case parse (spaces >> symbol) "lisp" input of
+readExpr input = case parse parseExpr "lisp" input of
   Left err -> "No match" ++ show err
   Right _ -> "Found value"
 
@@ -21,9 +22,19 @@ spaces = skipMany1 space
 parseString :: Parser LispVal
 parseString = do
   char '"'
-  x <- many (noneOf "\"")
+  x <- many (noneOf "\"" <|> escapedChar)
   char '"'
   return $ String x
+
+escapedChar :: Parser Char
+escapedChar = do
+  char '\\'
+  c <- oneOf ['n', 'r', 't', '\\', '"']
+  return $ case c of
+    'n' -> '\n'
+    'r' -> '\r'
+    't' -> '\t'
+    _ -> c
 
 parseAtom :: Parser LispVal
 parseAtom = do
@@ -35,9 +46,14 @@ parseAtom = do
     "#f" -> Bool False
     _ -> Atom atom
 
+parseNumber :: Parser LispValas
+parseNumber = do
+  x <- many1 digit
+  return $ case x of 
+parseNumber = many1 digit >> \x -> return . Number . read $ x
 
-parseNumber :: Parser LispVal
-parseNumber = liftM (Number . read) $ many1 digit
+parseExpr :: Parser LispVal
+parseExpr = parseAtom <|> parseString <|> parseNumber
 
 data LispVal = Atom String
                | List [LispVal]
