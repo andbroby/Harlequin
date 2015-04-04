@@ -49,7 +49,7 @@ parseAtom = do
     _ -> Atom atom
 
 parseNumber :: Parser LispVal
-parseNumber = parseDec <|> parseDec2 <|> parseHex <|> parseBin -- <|> parseOct
+parseNumber = parseDec <|> parseDec2 <|> parseHex <|> parseBin <|> parseChar <|> parseOct
 
 parseDec :: Parser LispVal
 parseDec = liftM (Number . read) $ many1 digit
@@ -74,14 +74,41 @@ parseBin = try $ do
   return $ Number .  readBin $ x
 
 parseExpr :: Parser LispVal
-parseExpr = parseAtom <|> parseString <|> parseNumber <|> parseBool
+parseExpr = parseAtom
+            <|> parseString
+            <|> parseNumber
+            <|> parseBool
 
 parseBool :: Parser LispVal
 parseBool = char '#' >> ((char 't' >> return (Bool True)) <|> (char 'f' >> return (Bool False)))
 
+parseOct :: Parser LispVal
+parseOct = try $ do
+  string "#o"
+  x <- many1 octDigit
+  return $ Number . fst $ readOct x !! 0
+
+parseChar :: Parser LispVal
+parseChar = try $ do
+  string "#\\"
+  let alphaLower = ['a'..'z']
+      alphaUpper = map toUpper alphaLower
+      symbols = " (" ++ alphaLower ++ alphaUpper
+  x <- string "newline"
+       <|> string "space"
+       <|> do
+         x <- oneOf symbols
+         return $ show x
+  return $ Character $ case x of
+    "space" -> ' '
+    "newline" -> '\n'
+    otherwise -> head x
+
+
 data LispVal = Atom String
-               | List [LispVal]
-               | DottedList [LispVal] LispVal
-               | Number Integer
-               | String String
-               | Bool Bool
+             | List [LispVal]
+             | DottedList [LispVal] LispVal
+             | Number Integer
+             | String String
+             | Bool Bool
+             | Character Char
