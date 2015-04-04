@@ -9,7 +9,31 @@ import Data.Char
 main = do
   args <- getArgs
   putStrLn . readExpr $ args !! 0
+
+data LispVal = Atom String
+             | List [LispVal]
+             | DottedList [LispVal] LispVal
+             | Number Integer
+             | String String
+             | Bool Bool
+             | Character Char
+             | Float Double
   
+parseNumber :: Parser LispVal
+parseNumber = parseDec
+              <|> parseDec2
+              <|> parseHex
+              <|> parseBin
+              <|> parseOct
+              <|> parseFloat
+
+parseExpr :: Parser LispVal
+parseExpr = parseAtom
+            <|> parseString
+            <|> parseNumber
+            <|> parseBool
+            <|> parseChar
+
 symbol :: Parser Char
 symbol = oneOf "!%&|*+-/:<=>?@^_~"
 
@@ -48,9 +72,6 @@ parseAtom = do
     "#f" -> Bool False
     _ -> Atom atom
 
-parseNumber :: Parser LispVal
-parseNumber = parseDec <|> parseDec2 <|> parseHex <|> parseBin <|> parseChar <|> parseOct
-
 parseDec :: Parser LispVal
 parseDec = liftM (Number . read) $ many1 digit
 
@@ -73,14 +94,8 @@ parseBin = try $ do
   let readBin = foldl (\acc y -> acc*2 + (fromIntegral . ord $ y)) 0
   return $ Number .  readBin $ x
 
-parseExpr :: Parser LispVal
-parseExpr = parseAtom
-            <|> parseString
-            <|> parseNumber
-            <|> parseBool
-
 parseBool :: Parser LispVal
-parseBool = char '#' >> ((char 't' >> return (Bool True)) <|> (char 'f' >> return (Bool False)))
+parseBool = try $ char '#' >> ((char 't' >> return (Bool True)) <|> (char 'f' >> return (Bool False)))
 
 parseOct :: Parser LispVal
 parseOct = try $ do
@@ -104,11 +119,10 @@ parseChar = try $ do
     "newline" -> '\n'
     otherwise -> head x
 
+parseFloat :: Parser LispVal
+parseFloat = try $ do
+  x <- many1 digit
+  char '.'
+  y <- many1 digit
+  return $ Float . fst . head . readFloat $ x ++ "." ++ y
 
-data LispVal = Atom String
-             | List [LispVal]
-             | DottedList [LispVal] LispVal
-             | Number Integer
-             | String String
-             | Bool Bool
-             | Character Char
