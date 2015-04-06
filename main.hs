@@ -32,14 +32,19 @@ parseNumber = parseDec
               <|> parseOct
               <|> parseFloat
 
-
-
 parseExpr :: Parser LispVal
 parseExpr = parseAtom
             <|> parseString
             <|> parseNumber
             <|> parseBool
             <|> parseChar
+            <|> parseQuoted
+            <|> do
+              char '('
+              x <- parseList <|> parseDottedList
+              char ')'
+              return x
+            
 
 parseList :: Parser LispVal
 parseList = try $ liftM List $ sepBy parseExpr spaces
@@ -55,6 +60,7 @@ parseQuoted = try $ do
   char '\''
   x <- parseExpr
   return $ List [Atom "quote", x]
+
 
 symbol :: Parser Char
 symbol = oneOf "!%&|*+-/:<=>?@^_~"
