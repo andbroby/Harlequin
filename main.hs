@@ -5,20 +5,25 @@ import Control.Monad
 import Text.ParserCombinators.Parsec hiding (spaces)
 import Numeric
 import Data.Char
+import Data.Complex
+import Data.Ratio
 
 main = do
   args <- getArgs
-  putStrLn . readExpr $ args !! 0
+  putStrLn . readExpr $ head args
 
 data LispVal = Atom String
              | List [LispVal]
              | DottedList [LispVal] LispVal
              | Number Integer
+             | Complex (Complex Double)
+             | Int Integer
+             | Ratio Rational
              | String String
              | Bool Bool
              | Character Char
              | Float Double
-  
+
 parseNumber :: Parser LispVal
 parseNumber = parseDec
               <|> parseDec2
@@ -26,6 +31,8 @@ parseNumber = parseDec
               <|> parseBin
               <|> parseOct
               <|> parseFloat
+
+
 
 parseExpr :: Parser LispVal
 parseExpr = parseAtom
@@ -45,6 +52,23 @@ readExpr input = case parse parseExpr "lisp" input of
 spaces :: Parser ()
 spaces = skipMany1 space
 
+parseComplex :: Parser LispVal
+parseComplex = try $ do
+  a <- parseFloat <|> parseDec2 <|> parseDec
+  char '+'
+  b <- parseFloat <|> parseDec2 <|> parseDec
+  char 'j'
+  return $ Complex ((toDouble a) :+ (toDouble b))
+    where toDouble (Float a) = a
+          toDouble (Number a) = fromIntegral a
+
+parseRational :: Parser LispVal
+parseRational = try $ do
+  n <- many1 digit
+  char '/'
+  d <- many1 digit
+  return $ Ratio ((read n) % (read d))
+
 parseString :: Parser LispVal
 parseString = do
   char '"'
@@ -55,7 +79,7 @@ parseString = do
 escapedChar :: Parser Char
 escapedChar = do
   char '\\'
-  c <- oneOf ['n', 'r', 't', '\\', '"']
+  c <- oneOf "nrt\\\""
   return $ case c of
     'n' -> '\n'
     'r' -> '\r'
@@ -79,13 +103,13 @@ parseDec2 :: Parser LispVal
 parseDec2 = try $ do
   string "#d"
   x <- many1 digit
-  return . Number . read $ x
+  return $ Number . read $ x
 
 parseHex :: Parser LispVal
 parseHex = try $ do
   string "#x"
   x <- many1 hexDigit
-  return $ Number . fst $ readHex x !! 0
+  return $ Number . fst . head . readHex $ x
 
 parseBin :: Parser LispVal
 parseBin = try $ do
@@ -101,7 +125,7 @@ parseOct :: Parser LispVal
 parseOct = try $ do
   string "#o"
   x <- many1 octDigit
-  return $ Number . fst $ readOct x !! 0
+  return $ Number . fst . head . readOct $ x
 
 parseChar :: Parser LispVal
 parseChar = try $ do
