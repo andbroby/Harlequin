@@ -41,6 +41,10 @@ parseExpr = parseAtom
             <|> parseBool
             <|> parseChar
 
+parseList :: Parser LispVal
+parseList = try $ liftM List $ sepBy parseExpr spaces
+
+
 symbol :: Parser Char
 symbol = oneOf "!%&|*+-/:<=>?@^_~"
 
