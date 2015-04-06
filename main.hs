@@ -39,24 +39,37 @@ parseExpr = parseAtom
             <|> parseBool
             <|> parseChar
             <|> parseQuoted
+            <|> parseQuasiQuote
+            <|> parseQuasiUnquote
             <|> do
               char '('
-              x <- parseList <|> parseDottedList
+              x <- try parseList <|> parseDottedList
               char ')'
               return x
-            
-
+              
 parseList :: Parser LispVal
 parseList = try $ liftM List $ sepBy parseExpr spaces
 
+parseQuasiQuote :: Parser LispVal
+parseQuasiQuote = try $ do
+  char '`'
+  x <- parseExpr
+  return $ List [Atom "quasiquote", x]
+
+parseQuasiUnquote :: Parser LispVal
+parseQuasiUnquote = try $ do
+  char ','
+  x <- parseExpr
+  return $ List [Atom "unquote", x]
+
 parseDottedList :: Parser LispVal
-parseDottedList = try $ do
+parseDottedList = do
   head <- endBy parseExpr spaces
   tail <- char '.' >> spaces >> parseExpr
   return $ DottedList head tail
 
 parseQuoted :: Parser LispVal
-parseQuoted = try $ do
+parseQuoted = do
   char '\''
   x <- parseExpr
   return $ List [Atom "quote", x]
@@ -74,7 +87,7 @@ spaces :: Parser ()
 spaces = skipMany1 space
 
 parseComplex :: Parser LispVal
-parseComplex = try $ do
+parseComplex = do
   a <- parseFloat <|> parseDec2 <|> parseDec
   char '+'
   b <- parseFloat <|> parseDec2 <|> parseDec
@@ -84,7 +97,7 @@ parseComplex = try $ do
           toDouble (Number a) = fromIntegral a
 
 parseRational :: Parser LispVal
-parseRational = try $ do
+parseRational = do
   n <- many1 digit
   char '/'
   d <- many1 digit
@@ -121,35 +134,35 @@ parseDec :: Parser LispVal
 parseDec = liftM (Number . read) $ many1 digit
 
 parseDec2 :: Parser LispVal
-parseDec2 = try $ do
+parseDec2 = do
   string "#d"
   x <- many1 digit
   return $ Number . read $ x
 
 parseHex :: Parser LispVal
-parseHex = try $ do
+parseHex = do
   string "#x"
   x <- many1 hexDigit
   return $ Number . fst . head . readHex $ x
 
 parseBin :: Parser LispVal
-parseBin = try $ do
+parseBin = do
   string "#b"
   x <- many1 . oneOf $ "10"
   let readBin = foldl (\acc y -> acc*2 + (fromIntegral . ord $ y)) 0
   return $ Number .  readBin $ x
 
 parseBool :: Parser LispVal
-parseBool = try $ char '#' >> ((char 't' >> return (Bool True)) <|> (char 'f' >> return (Bool False)))
+parseBool = char '#' >> ((char 't' >> return (Bool True)) <|> (char 'f' >> return (Bool False)))
 
 parseOct :: Parser LispVal
-parseOct = try $ do
+parseOct = do
   string "#o"
   x <- many1 octDigit
   return $ Number . fst . head . readOct $ x
 
 parseChar :: Parser LispVal
-parseChar = try $ do
+parseChar = do
   string "#\\"
   let alphaLower = ['a'..'z']
       alphaUpper = map toUpper alphaLower
@@ -165,7 +178,7 @@ parseChar = try $ do
     otherwise -> head x
 
 parseFloat :: Parser LispVal
-parseFloat = try $ do
+parseFloat = do
   x <- many1 digit
   char '.'
   y <- many1 digit
