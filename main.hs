@@ -44,6 +44,11 @@ parseExpr = parseAtom
 parseList :: Parser LispVal
 parseList = try $ liftM List $ sepBy parseExpr spaces
 
+parseDottedList :: Parser LispVal
+parseDottedList = try $ do
+  head <- endBy parseExpr spaces
+  tail <- char '.' >> spaces >> parseExpr
+  return $ DottedList head tail
 
 symbol :: Parser Char
 symbol = oneOf "!%&|*+-/:<=>?@^_~"
