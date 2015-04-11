@@ -14,6 +14,7 @@ main = do
   putStrLn . readExpr $ head args
 
 data LispVal = Atom String
+             | Nil ()
              | List [LispVal]
              | DottedList [LispVal] LispVal
              | Number Integer
@@ -47,7 +48,9 @@ parseExpr = parseAtom
             <|> parseVector
             <|> do
               char '('
-              x <- parseList'
+              optionalSpace
+              x <- parseList
+              optionalSpace
               char ')'
               return x
 
@@ -58,16 +61,22 @@ parseVector = try $ do
   char ')'
   return content
 
+optionalSpace :: Parser ()
+optionalSpace = skipMany space
+
 parseVectorContent :: Parser LispVal
 parseVectorContent = do
   arrayValues <- sepBy parseExpr spaces
   return $ Vector (A.listArray (0, (length arrayValues - 1)) arrayValues)
 
-parseList' :: Parser LispVal
-parseList' = parseList <|> parseDottedList
-              
 parseList :: Parser LispVal
-parseList = liftM List $ sepBy parseExpr spaces
+parseList = do
+  head <- sepEndBy parseExpr spaces
+  tail <- (char '.' >> spaces >> parseExpr) <|> return (Nil ())
+  optionalSpace
+  return $ case tail of
+    (Nil ()) -> List head
+    otherwise -> DottedList head tail
 
 parseQuasiQuote :: Parser LispVal
 parseQuasiQuote = do
@@ -81,18 +90,11 @@ parseQuasiUnquote = do
   x <- parseExpr
   return $ List [Atom "unquote", x]
 
-parseDottedList :: Parser LispVal
-parseDottedList = do
-  head <- endBy parseExpr spaces
-  tail <- char '.' >> spaces >> parseExpr
-  return $ DottedList head tail
-
 parseQuoted :: Parser LispVal
 parseQuoted = do
   char '\''
   x <- parseExpr
   return $ List [Atom "quote", x]
-
 
 symbol :: Parser Char
 symbol = oneOf "!%&|*+-/:<=>?@^_~"
