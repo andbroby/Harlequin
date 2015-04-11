@@ -46,13 +46,8 @@ parseExpr = parseAtom
             <|> parseQuasiQuote
             <|> parseQuasiUnquote
             <|> parseVector
-            <|> do
-              char '('
-              optionalSpace
-              x <- parseList
-              optionalSpace
-              char ')'
-              return x
+            <|> parseList
+          
 
 parseVector :: Parser LispVal
 parseVector = try $ do
@@ -71,9 +66,12 @@ parseVectorContent = do
 
 parseList :: Parser LispVal
 parseList = do
+  char '('
+  optionalSpace
   head <- sepEndBy parseExpr spaces
   tail <- (char '.' >> spaces >> parseExpr) <|> return (Nil ())
   optionalSpace
+  char ')'
   return $ case tail of
     (Nil ()) -> List head
     otherwise -> DottedList head tail
