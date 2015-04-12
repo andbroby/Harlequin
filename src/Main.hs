@@ -75,7 +75,29 @@ primitives = [("*", numericBinOp (*)),
               ("/", numericBinOp div),
               ("mod", numericBinOp mod),
               ("quotient", numericBinOp quot),
-              ("remainder", numericBinOp rem)]
+              ("remainder", numericBinOp rem),
+              ("symbol?", unaryOp symbolq),
+              ("string?", unaryOp stringq),
+              ("number?", unaryOp numberq),
+              ("bool?", unaryOp boolq),
+              ("list?", unaryOp listq)]
+
+unaryOp :: (LispVal -> LispVal) -> [LispVal] -> LispVal
+unaryOp f [val] = f val
+
+symbolq, stringq, numberq, boolq, listq :: LispVal -> LispVal
+symbolq (Atom _) = Bool True
+symbolq _ = Bool False
+stringq (String _) = Bool True
+stringq _ = Bool False
+boolq (Bool _) = Bool True
+boolq _ = Bool False
+listq (List _) = Bool True
+listq (DottedList _ _) = Bool True
+listq _ = Bool False
+numberq (Number _) = Bool True
+numberq _ = Bool False
+
 
 numericBinOp :: (Integer -> Integer -> Integer) -> [LispVal] -> LispVal
 numericBinOp op params = Number $ foldl1 op $ map unpackNum params
@@ -93,7 +115,6 @@ readExpr :: String -> LispVal
 readExpr input = case parse parseExpr "lisp" input of
   Left err -> String $ "No match" ++ show err
   Right value -> value
-          
 
 parseVector :: Parser LispVal
 parseVector = try $ do
