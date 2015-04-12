@@ -8,20 +8,17 @@ import Data.Char
 import Data.Complex
 import Data.Ratio
 import qualified Data.Array as A
+import Control.Monad.Error
 
 main = getArgs >>= print . eval . readExpr . head
 
-instance Show LispVal where
-  show (String content) = "\"" ++ content ++ "\""
-  show (Bool True) = "#t"
-  show (Bool False) = "#f"
-  show (Atom name) = name
-  show (Number content) = show content
-  show (List content) = "(" ++ unwordList content ++ ")"
-  show (DottedList head tail) = "(" ++ unwordList head ++ " . " ++ show tail ++ ")"
-
-unwordList :: [LispVal] -> String
-unwordList = unwords . map show
+data LispError = NumArgs Integer [LispVal]
+               | TypeMismatch String LispVal
+               | Parser ParseError
+               | BadSpecialForm String LispVal
+               | NotFunction String String
+               | UnboundVar String String
+               | Default String
 
 data LispVal = Atom String
              | Nil ()
@@ -36,6 +33,33 @@ data LispVal = Atom String
              | Character Char
              | Float Double
              | Vector (A.Array Int LispVal)
+
+instance Show LispVal where
+  show (String content) = "\"" ++ content ++ "\""
+  show (Bool True) = "#t"
+  show (Bool False) = "#f"
+  show (Atom name) = name
+  show (Number content) = show content
+  show (List content) = "(" ++ unwordList content ++ ")"
+  show (DottedList head tail) = "(" ++ unwordList head ++ " . " ++ show tail ++ ")"
+
+instance Show LispError where
+  show (UnboundVar message varname) = message ++ ": " ++ varname
+  show (NumArgs expected found) = "Expected " ++
+                                  show expected ++
+                                  " args, found" ++
+                                  show found
+  show (TypeMismatch expected found) = "Invalid type. Expected " ++
+                                       expected ++
+                                       " found " ++
+                                       show found
+  show (Parser parseError) = "Parse error at " ++ show parseError
+  show (NotFunction message func) = message ++ ": " ++ show func
+  show (BadSpecialForm message form) = message ++ ": " ++ show form
+  
+unwordList :: [LispVal] -> String
+unwordList = unwords . map show
+
 
 
 parseNumber :: Parser LispVal
@@ -97,7 +121,6 @@ listq (DottedList _ _) = Bool True
 listq _ = Bool False
 numberq (Number _) = Bool True
 numberq _ = Bool False
-
 
 numericBinOp :: (Integer -> Integer -> Integer) -> [LispVal] -> LispVal
 numericBinOp op params = Number $ foldl1 op $ map unpackNum params
