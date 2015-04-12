@@ -9,9 +9,19 @@ import Data.Complex
 import Data.Ratio
 import qualified Data.Array as A
 
-main = do
-  args <- getArgs
-  putStrLn . readExpr $ head args
+main = getArgs >>= print . eval . readExpr . head
+
+instance Show LispVal where
+  show (String content) = "\"" ++ content ++ "\""
+  show (Bool True) = "#t"
+  show (Bool False) = "#f"
+  show (Atom name) = name
+  show (Number content) = show content
+  show (List content) = "(" ++ unwordList content ++ ")"
+  show (DottedList head tail) = "(" ++ unwordList head ++ " . " ++ show tail ++ ")"
+
+unwordList :: [LispVal] -> String
+unwordList = unwords . map show
 
 data LispVal = Atom String
              | Nil ()
@@ -47,6 +57,42 @@ parseExpr = parseAtom
             <|> parseQuasiUnquote
             <|> parseVector
             <|> parseList
+
+eval :: LispVal -> LispVal
+eval val@(String _) = val
+eval val@(Number _) = val
+eval val@(Bool _) = val
+eval (List [Atom "quote", val]) = val
+eval (List (Atom func:args)) = apply func $ map eval args
+
+apply :: String -> [LispVal] -> LispVal
+apply func args = maybe (Bool False) ($ args) $ lookup func primitives
+
+primitives :: [(String, [LispVal] -> LispVal)]
+primitives = [("*", numericBinOp (*)),
+              ("+", numericBinOp (+)),
+              ("-", numericBinOp (-)),
+              ("/", numericBinOp div),
+              ("mod", numericBinOp mod),
+              ("quotient", numericBinOp quot),
+              ("remainder", numericBinOp rem)]
+
+numericBinOp :: (Integer -> Integer -> Integer) -> [LispVal] -> LispVal
+numericBinOp op params = Number $ foldl1 op $ map unpackNum params
+
+unpackNum :: LispVal -> Integer
+unpackNum (Number n) = n
+unpackNum (String n) = let parsed = reads n :: [(Integer, String)] in
+                        if null parsed
+                           then 0
+                        else fst $ parsed !! 0
+unpackNum (List [n]) = unpackNum n
+unpackNum _ = 0
+
+readExpr :: String -> LispVal
+readExpr input = case parse parseExpr "lisp" input of
+  Left err -> String $ "No match" ++ show err
+  Right value -> value
           
 
 parseVector :: Parser LispVal
@@ -96,11 +142,6 @@ parseQuoted = do
 
 symbol :: Parser Char
 symbol = oneOf "!%&|*+-/:<=>?@^_~"
-
-readExpr :: String -> String
-readExpr input = case parse parseExpr "lisp" input of
-  Left err -> "No match" ++ show err
-  Right _ -> "Found value"
 
 spaces :: Parser ()
 spaces = skipMany1 space
