@@ -106,6 +106,12 @@ unpackNum :: LispVal -> Integer
 unpackNum (Number n) = n
 unpackNum _ = 0
 
+symbolToString, stringToSymbol :: LispVal -> LispVal
+symbolToString (Atom sym) = String sym
+symbolToString _ = String ""
+stringToSymbol (String str) = Atom str
+stringToSymbol _ = Atom ""
+
 readExpr :: String -> LispVal
 readExpr input = case parse parseExpr "lisp" input of
   Left err -> String $ "No match" ++ show err
