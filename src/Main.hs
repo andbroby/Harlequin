@@ -124,7 +124,31 @@ primitives = [("*", numericBinOp (*)),
               ("string?", unaryOp stringq),
               ("number?", unaryOp numberq),
               ("bool?", unaryOp boolq),
-              ("list?", unaryOp listq)]
+              ("list?", unaryOp listq),
+              ("=", numBoolBinOp (==)),
+              ("<", numBoolBinOp (<)),
+              (">", numBoolBinOp (>)),
+              ("/=", numBoolBinOp (/=)),
+              (">=", numBoolBinOp (>=)),
+              ("<=", numBoolBinOp (<=)),
+              ("&&", boolBoolBinOp (&&)),
+              ("||", boolBoolBinOp (||)),
+              ("string=?", strBoolBinOp (==)),
+              ("string<?", strBoolBinOp (<)),
+              ("string>?", strBoolBinOp (>)),
+              ("string<=?", strBoolBinOp (<=)),
+              ("string>=?", strBoolBinOp (>=))]
+
+boolBinOp :: (LispVal -> ThrowsError a) -> (a -> a -> Bool) -> [LispVal] -> ThrowsError LispVal
+boolBinOp unpacker op args = if length args /= 2
+                             then throwError $ NumArgs 2 args
+                             else do left <- unpacker $ head args
+                                     right <- unpacker $ last args
+                                     return $ Bool $ left `op` right
+
+numBoolBinOp = boolBinOp unpackNum
+strBoolBinOp = boolBinOp unpackStr
+boolBoolBinOp = boolBinOp unpackBool
 
 unaryOp :: (LispVal -> ThrowsError LispVal) -> [LispVal] -> ThrowsError LispVal
 unaryOp f [val] = f val
@@ -156,6 +180,16 @@ unpackNum (String str) = let parsed = reads str in
                           else return $ fst $ parsed !! 0
 unpackNum (List [n]) = unpackNum n
 unpackNum notNum = throwError $ TypeMismatch "number" notNum
+
+unpackStr :: LispVal -> ThrowsError String
+unpackStr (String s) = return s
+unpackStr (Number s) = return $ show s
+unpackStr (Bool s) = return $ show s
+unpackStr s = throwError $ TypeMismatch "string" s
+
+unpackBool :: LispVal -> ThrowsError Bool
+unpackBool (Bool b) = return b
+unpackBool b = throwError $ TypeMismatch "boolean" b
 
 symbolToString, stringToSymbol :: LispVal -> LispVal
 symbolToString (Atom sym) = String sym
