@@ -1,3 +1,5 @@
+{-# LANGUAGE ExistentialQuantification #-}
+
 module Main where
 
 import System.Environment
@@ -36,6 +38,8 @@ data LispVal = Atom String
              | Character Char
              | Float Double
              | Vector (A.Array Int LispVal)
+
+data Unpacker = forall a. Eq a => AnyUnpacker (LispVal -> ThrowsError a)
 
 instance Show LispVal where
   show (String content) = "\"" ++ content ++ "\""
@@ -150,6 +154,22 @@ eqv [(List arg1), (List arg2)] = return $ Bool $ (length arg1 == length arg2) &&
 eqv [_, _] = return $ Bool $ False
 eqv x = throwError $ NumArgs 2 x
 
+equal :: [LispVal] -> ThrowsError LispVal
+equal [arg1, arg2] = do
+  primitiveEquals <- liftM or $ mapM (unpackEquals arg1 arg2)
+                     [AnyUnpacker unpackNum, AnyUnpacker unpackStr, AnyUnpacker unpackBool]
+  eqvEquals <- eqv [arg1, arg2]
+  return $ Bool $ (primitiveEquals || let (Bool x) = eqvEquals in x)
+equal err = throwError $ NumArgs 2 err
+
+unpackEquals :: LispVal -> LispVal -> Unpacker -> ThrowsError Bool
+unpackEquals arg1 arg2 (AnyUnpacker unpacker) =
+  do unpacked1 <- unpacker arg1
+     unpacked2 <-unpacker arg2
+     return $ unpacked1 == unpacked2
+  `catchError` (const $ return False)
+     
+
 primitives :: [(String, [LispVal] -> ThrowsError LispVal)]
 primitives = [("*", numericBinOp (*)),
               ("+", numericBinOp (+)),
@@ -175,7 +195,14 @@ primitives = [("*", numericBinOp (*)),
               ("string<?", strBoolBinOp (<)),
               ("string>?", strBoolBinOp (>)),
               ("string<=?", strBoolBinOp (<=)),
-              ("string>=?", strBoolBinOp (>=))]
+              ("string>=?", strBoolBinOp (>=)),
+              ("car" , car),
+              ("cdr", cdr),
+              ("cons", cons),
+              ("eq?", eqv),
+              ("eqv?", eqv),
+              ("equal?", equal)
+             ]
 
 boolBinOp :: (LispVal -> ThrowsError a) -> (a -> a -> Bool) -> [LispVal] -> ThrowsError LispVal
 boolBinOp unpacker op args = if length args /= 2
