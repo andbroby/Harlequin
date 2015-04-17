@@ -148,14 +148,20 @@ eqv [(Number arg1), (Number arg2)] = return $ Bool $ arg1 == arg2
 eqv [(String arg1), (String arg2)] = return $ Bool $ arg1 == arg2
 eqv [(Atom arg1), (Atom arg2)] = return $ Bool $ arg1 == arg2
 eqv [(DottedList xs x), (DottedList ys y)] = eqv [List $ xs ++ [x], List $ ys ++ [y]]
-eqv [(List arg1), (List arg2)] = return $ Bool $ (length arg1 == length arg2) && (all eqvPair $ zip arg1 arg2)
-                                 where eqvPair (x1, x2) = case eqv [x1, x2] of
-                                                           Left err -> False
-                                                           Right (Bool b) -> b
+eqv [l1@(List arg1), l2@(List arg2)] = eqvList eqv [l1, l2]
 eqv [_, _] = return $ Bool $ False
 eqv x = throwError $ NumArgs 2 x
 
+eqvList :: ([LispVal] -> ThrowsError LispVal) -> [LispVal] -> ThrowsError LispVal
+eqvList eqvf [(List arg1), (List arg2)] = return $ Bool $ (length arg1 == length arg2) &&
+                                          (all eqvPair$ zip arg1 arg2)
+                                          where eqvPair (x1, x2) = case eqv [x1, x2] of
+                                                  Left err -> False
+                                                  Right (Bool b) -> b
+
 equal :: [LispVal] -> ThrowsError LispVal
+equal [l1@(List arg1), l2@(List arg2)] = eqvList equal [l1, l2]
+equal [(DottedList xs x), (DottedList ys y)] = equal [List $ xs ++ [x], List $ ys ++ [y]]
 equal [arg1, arg2] = do
   primitiveEquals <- liftM or $ mapM (unpackEquals arg1 arg2)
                      [AnyUnpacker unpackNum, AnyUnpacker unpackStr, AnyUnpacker unpackBool]
