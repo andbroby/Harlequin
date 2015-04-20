@@ -75,8 +75,14 @@ main = do
   args <- getArgs
   case length args of
    0 -> runRepl
-   1 -> evalAndPrint $ head args
+   1 -> runOne $ head args
    otherwise -> putStrLn "Program takes only 0 or 1 argument"
+
+runOne :: String -> IO ()
+runOne expr = nullEnv >>= flip evalAndPrint expr
+
+runRepl :: IO ()
+runRepl = nullEnv >>= until_ (== "quit") (readPrompt "Harlequin >>>") . evalAndPrint
 
 nullEnv :: IO Env
 nullEnv = newIORef []
@@ -123,11 +129,11 @@ bindVars envRef bindings = readIORef envRef >>= extendEnv bindings >>= newIORef
 
 trapError action = catchError action (return . show)
 
-evalString :: String -> IO String
-evalString expr = return $ extractValue $ trapError (liftM show $ readExpr expr >>= eval)
+evalString :: Env -> String -> IO String
+evalString env expr = runIOThrows $ liftM show $ (liftThrows $ readExpr expr) >>= eval env
 
-evalAndPrint :: String -> IO ()
-evalAndPrint expr = evalString expr >>= putStrLn
+evalAndPrint :: Env -> String -> IO ()
+evalAndPrint env expr = evalString env expr >>= putStrLn
 
 until_ :: Monad m => (a -> Bool) -> m a -> (a -> m ()) -> m ()
 until_ pred prompt action = do
@@ -135,9 +141,6 @@ until_ pred prompt action = do
   if pred result
      then return ()
     else action result >> until_ pred prompt action
-
-runRepl :: IO ()
-runRepl = until_ (== "quit") (readPrompt "Harlequin>>> ") evalAndPrint
 
 extractValue :: ThrowsError a -> a
 extractValue (Right val) = val
@@ -176,30 +179,34 @@ parseExpr = parseAtom
             <|> parseVector
             <|> parseList
 
-eval :: LispVal -> ThrowsError LispVal
-eval val@(String _) = return val
-eval val@(Number _) = return val
-eval val@(Bool _) = return val
-eval (List [Atom "quote", val]) = return val
-eval (List [Atom "if", pred, conseq, alt]) =
-  do result <- eval pred
+eval :: Env -> LispVal -> IOThrowsError LispVal
+eval env val@(String _) = return val
+eval env val@(Number _) = return val
+eval env val@(Bool _) = return val
+eval env (List [Atom "quote", val]) = return val
+eval env (List [Atom "if", pred, conseq, alt]) =
+  do result <- eval env pred
      case result of
-      Bool False -> eval alt
-      Bool True -> eval conseq
+      Bool False -> eval env alt
+      Bool True -> eval env conseq
       otherwise -> throwError $ TypeMismatch "bool" pred
-eval form@(List (Atom "cond" : clauses)) =
+eval env (List [Atom "set!", Atom var, form]) =
+  eval env form >>= setVar env var
+eval env (List [Atom "define", Atom var, form]) =
+  eval env form >>= defineVar env var
+eval env form@(List (Atom "cond" : clauses)) =
   if null clauses
      then throwError $ BadSpecialForm "no clause for true in cond expr" form
   else
     case head clauses of
-     List [Atom "else", expr] -> eval expr
-     List [test, expr] -> eval $ List [Atom "if",
+     List [Atom "else", expr] -> eval env expr
+     List [test, expr] -> eval env $ List [Atom "if",
                                        test,
                                        expr,
                                        List (Atom "cond" : tail clauses)]
      otherwise -> throwError $ BadSpecialForm "ill-formed cond expr: " form
-eval (List (Atom func:args)) = mapM eval args >>= apply func
-eval badForm = throwError $ BadSpecialForm "Unrecognized special form " badForm
+eval env (List (Atom func:args)) = mapM (eval $ env) args >>= liftThrows . apply func
+eval env badForm = throwError $ BadSpecialForm "Unrecognized special form " badForm
 
 apply :: String -> [LispVal] -> ThrowsError LispVal
 apply func args = maybe (throwError $ NotFunction "Unrecognized primitive function args" func)
