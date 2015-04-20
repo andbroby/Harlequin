@@ -82,7 +82,7 @@ runOne :: String -> IO ()
 runOne expr = nullEnv >>= flip evalAndPrint expr
 
 runRepl :: IO ()
-runRepl = nullEnv >>= until_ (== "quit") (readPrompt "Harlequin >>>") . evalAndPrint
+runRepl = nullEnv >>= until_ (== "quit") (readPrompt "Harlequin >>> ") . evalAndPrint
 
 nullEnv :: IO Env
 nullEnv = newIORef []
@@ -183,6 +183,7 @@ eval :: Env -> LispVal -> IOThrowsError LispVal
 eval env val@(String _) = return val
 eval env val@(Number _) = return val
 eval env val@(Bool _) = return val
+eval env (Atom id) = getVar env id
 eval env (List [Atom "quote", val]) = return val
 eval env (List [Atom "if", pred, conseq, alt]) =
   do result <- eval env pred
