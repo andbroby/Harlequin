@@ -96,9 +96,8 @@ main = do args <- getArgs
 runOne :: [String] -> IO ()
 runOne args = do
     env <- primitiveBindings >>= flip bindVars [("args", List $ map String $ drop 1 args)] 
-    (runIOThrows $ liftM show $ eval env (List [Atom "load", String (args !! 0)])) 
+    (runIOThrows $ liftM show $ eval env (List [Atom "load", String (head args)])) 
         >>= hPutStrLn stderr
-
 
 runRepl :: IO ()
 runRepl = primitiveBindings >>= until_ (== "quit") (readPrompt "Harlequin >>> ") . evalAndPrint
@@ -209,12 +208,17 @@ parseExpr = parseAtom
             <|> parseQuasiUnquote
             <|> parseVector
             <|> parseList
+            <|> do
+              skipMany newline
+              return $ Nil ()
 
 eval :: Env -> LispVal -> IOThrowsError LispVal
 eval env val@(String _) = return val
 eval env val@(Number _) = return val
 eval env val@(Bool _) = return val
 eval env (Atom id) = getVar env id
+eval env (List [Atom "load", String filename]) = 
+     load filename >>= liftM last . mapM (eval env)
 eval env (List [Atom "quote", val]) = return val
 eval env (List [Atom "if", pred, conseq, alt]) =
   do result <- eval env pred
@@ -252,8 +256,6 @@ eval env (List (function : args)) = do
      argVals <- mapM (eval env) args
      apply func argVals
 eval env badForm = throwError $ BadSpecialForm "Unrecognized special form " badForm
-eval env (List [Atom "load", String filename]) = 
-     load filename >>= liftM last . mapM (eval env)
     
 apply :: LispVal -> [LispVal] -> IOThrowsError LispVal
 apply (PrimitiveFunc func) args = liftThrows $ func args
